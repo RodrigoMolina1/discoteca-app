@@ -1,209 +1,201 @@
-
-import { useLocalSearchParams, router } from 'expo-router';
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-  SafeAreaView,
+  ActivityIndicator,
+  Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   View,
-  Pressable,
-} from 'react-native';
+} from "react-native";
+import { obtenerEvento, type Evento } from "../../lib/api";
 
-const events: Record<string, {
-  name: string;
-  date: string;
-  time: string;
-  description: string;
-  dressCode: string;
-}> = {
-  '1': {
-    name: 'GOLDEN NIGHT',
-    date: 'SÁBADO 17 DE OCTUBRE',
-    time: '00:00 — 06:00',
-    description:
-      'Una noche especial con música electrónica, luces doradas y una experiencia premium.',
-    dressCode: 'Elegante',
-  },
-  '2': {
-    name: 'AFTER DARK',
-    date: 'VIERNES 23 DE OCTUBRE',
-    time: '00:00 — 06:00',
-    description:
-      'La mejor selección de música urbana para disfrutar una noche diferente.',
-    dressCode: 'Casual elegante',
-  },
-  '3': {
-    name: 'BLACK EDITION',
-    date: 'SÁBADO 31 DE OCTUBRE',
-    time: '00:00 — 06:00',
-    description:
-      'Una edición exclusiva con una atmósfera oscura, sofisticada y minimalista.',
-    dressCode: 'Total black',
-  },
-};
-
-export default function EventDetailsScreen() {
+export default function DetalleEvento() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const event = events[id ?? ''];
 
-  if (!event) {
+  const [evento, setEvento] = useState<Evento | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarEvento() {
+      try {
+        setCargando(true);
+        setError("");
+
+        if (!id) {
+          throw new Error("No se recibió el ID del evento");
+        }
+
+        const datos = await obtenerEvento(id);
+
+        if (activo) {
+          setEvento(datos);
+        }
+      } catch (e) {
+        if (activo) {
+          setError(
+            e instanceof Error ? e.message : "No se pudo cargar el evento",
+          );
+        }
+      } finally {
+        if (activo) {
+          setCargando(false);
+        }
+      }
+    }
+
+    cargarEvento();
+
+    return () => {
+      activo = false;
+    };
+  }, [id]);
+
+  if (cargando) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.title}>Evento no encontrado</Text>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backText}>← Volver</Text>
+      <View style={styles.centrado}>
+        <ActivityIndicator size="large" color="#D4AF37" />
+        <Text style={styles.textoSecundario}>Cargando evento...</Text>
+      </View>
+    );
+  }
+
+  if (error || !evento) {
+    return (
+      <View style={styles.centrado}>
+        <Text style={styles.titulo}>EVENTO NO ENCONTRADO</Text>
+        <Text style={styles.textoSecundario}>
+          {error || "No se encontró el evento solicitado."}
+        </Text>
+
+        <Pressable style={styles.boton} onPress={() => router.back()}>
+          <Text style={styles.textoBoton}>VOLVER</Text>
         </Pressable>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backText}>← VOLVER</Text>
-        </Pressable>
+    <ScrollView style={styles.contenedor}>
+      <Pressable onPress={() => router.back()} style={styles.volver}>
+        <Text style={styles.dorado}>← VOLVER</Text>
+      </Pressable>
 
-        <View style={styles.poster}>
-          <Text style={styles.posterLabel}>BOLICHE PRESENTA</Text>
-          <Text style={styles.posterTitle}>{event.name}</Text>
-          <View style={styles.line} />
-          <Text style={styles.posterSubtitle}>NIGHTLIFE EXPERIENCE</Text>
-        </View>
+      <View style={styles.contenido}>
+        <Text style={styles.etiqueta}>BOLICHE · EVENTO EXCLUSIVO</Text>
 
-        <Text style={styles.eyebrow}>DETALLES DEL EVENTO</Text>
-        <Text style={styles.title}>{event.name}</Text>
-        <Text style={styles.description}>{event.description}</Text>
+        <Text style={styles.titulo}>{evento.nombre}</Text>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.label}>FECHA</Text>
-          <Text style={styles.value}>{event.date}</Text>
+        <View style={styles.separador} />
 
-          <Text style={styles.label}>HORARIO</Text>
-          <Text style={styles.value}>{event.time}</Text>
+        <Text style={styles.subtitulo}>FECHA</Text>
+        <Text style={styles.texto}>{evento.fecha}</Text>
 
-          <Text style={styles.label}>VESTIMENTA</Text>
-          <Text style={styles.value}>{event.dressCode}</Text>
-        </View>
+        <Text style={styles.subtitulo}>HORARIO</Text>
+        <Text style={styles.texto}>{evento.horario}</Text>
+
+        <Text style={styles.subtitulo}>DESCRIPCIÓN</Text>
+        <Text style={styles.texto}>{evento.descripcion}</Text>
+
+        <Text style={styles.subtitulo}>ENTRADA</Text>
+        <Text style={styles.precio}>
+          ${evento.precio.toLocaleString("es-AR")}
+        </Text>
 
         <Pressable
-          style={styles.button}
-          onPress={() => alert('¡Próximamente podrás reservar tu entrada!')}
+          style={styles.boton}
+          onPress={() => router.push(`/reserva/${evento._id}`)}
         >
-          <Text style={styles.buttonText}>RESERVAR ENTRADA →</Text>
+          <Text style={styles.textoBoton}>RESERVAR ENTRADA</Text>
         </Pressable>
-
-        <Text style={styles.disclaimer}>
-          Información de muestra. Los eventos y horarios son ficticios.
-        </Text>
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  contenedor: {
     flex: 1,
-    backgroundColor: '#090909',
+    backgroundColor: "#090909",
   },
-  content: {
+  centrado: {
+    flex: 1,
+    backgroundColor: "#090909",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
-    paddingBottom: 40,
   },
-  backText: {
-    color: '#D6B56D',
-    fontSize: 12,
-    letterSpacing: 2,
-    marginBottom: 24,
+  contenido: {
+    padding: 24,
+    paddingTop: 32,
   },
-  poster: {
-    height: 260,
-    backgroundColor: '#17140D',
-    borderWidth: 1,
-    borderColor: '#806A3B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    marginBottom: 32,
+  volver: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
   },
-  posterLabel: {
-    color: '#D6B56D',
-    fontSize: 10,
-    letterSpacing: 3,
-  },
-  posterTitle: {
-    color: '#F4E4B8',
-    fontSize: 32,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginVertical: 22,
-  },
-  line: {
-    width: 60,
-    height: 1,
-    backgroundColor: '#D6B56D',
-  },
-  posterSubtitle: {
-    color: '#B8B3A7',
-    fontSize: 10,
-    letterSpacing: 2,
-    marginTop: 18,
-  },
-  eyebrow: {
-    color: '#D6B56D',
-    fontSize: 10,
-    letterSpacing: 3,
-    marginBottom: 10,
-  },
-  title: {
-    color: '#F5F0E5',
-    fontSize: 27,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  description: {
-    color: '#AAA69D',
-    fontSize: 15,
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  infoCard: {
-    backgroundColor: '#141414',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#292929',
-    padding: 20,
-    marginBottom: 24,
-  },
-  label: {
-    color: '#D6B56D',
-    fontSize: 10,
-    letterSpacing: 2,
-    marginBottom: 6,
-  },
-  value: {
-    color: '#F5F0E5',
-    fontSize: 15,
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: '#D6B56D',
-    padding: 17,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#090909',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  disclaimer: {
-    color: '#77736B',
+  etiqueta: {
+    color: "#D4AF37",
     fontSize: 11,
-    textAlign: 'center',
-    marginTop: 20,
+    letterSpacing: 2,
+    marginBottom: 14,
+  },
+  titulo: {
+    color: "#F5F5F5",
+    fontSize: 30,
+    fontWeight: "bold",
+    letterSpacing: 1,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  separador: {
+    height: 1,
+    backgroundColor: "#5E4B18",
+    marginBottom: 28,
+  },
+  subtitulo: {
+    color: "#D4AF37",
+    fontSize: 12,
+    fontWeight: "bold",
+    letterSpacing: 1.5,
+    marginTop: 22,
+    marginBottom: 8,
+  },
+  texto: {
+    color: "#E0E0E0",
+    fontSize: 16,
+    lineHeight: 25,
+  },
+  textoSecundario: {
+    color: "#BDBDBD",
+    fontSize: 14,
+    marginTop: 16,
+    textAlign: "center",
+  },
+  precio: {
+    color: "#D4AF37",
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+  dorado: {
+    color: "#D4AF37",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  boton: {
+    backgroundColor: "#D4AF37",
+    padding: 18,
+    alignItems: "center",
+    borderRadius: 6,
+    marginTop: 32,
+    marginBottom: 40,
+  },
+  textoBoton: {
+    color: "#090909",
+    fontSize: 14,
+    fontWeight: "bold",
+    letterSpacing: 1,
   },
 });

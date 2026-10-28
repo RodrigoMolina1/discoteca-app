@@ -1,432 +1,503 @@
-
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-  Pressable,
-} from 'react-native';
-import { router } from 'expo-router';
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { obtenerEventos, type Evento } from "../lib/api";
 
-const events = [
-  {
-    id: '1',
-    name: 'GOLDEN NIGHT',
-    day: 'SÁBADO',
-    time: '23:00 HS',
-    category: 'NOCHE PREMIUM',
-  },
-  {
-    id: '2',
-    name: 'AFTER DARK',
-    day: 'VIERNES',
-    time: '00:00 HS',
-    category: 'CLUB NIGHT',
-  },
-  {
-    id: '3',
-    name: 'BLACK EDITION',
-    day: 'DOMINGO',
-    time: '22:00 HS',
-    category: 'EDICIÓN ESPECIAL',
-  },
-];
+const GOLD = "#D4AF37";
+const BACKGROUND = "#090909";
+const CARD = "#141414";
 
 export default function HomeScreen() {
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+
+  const cargarEventos = useCallback(async () => {
+    try {
+      setError("");
+      setCargando(true);
+      const datos = await obtenerEventos();
+      setEventos(datos.filter((evento) => evento.activo));
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudieron cargar los eventos.",
+      );
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      cargarEventos();
+    }, [cargarEventos]),
+  );
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={BACKGROUND} />
 
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        {/* Encabezado */}
         <View style={styles.header}>
           <View>
             <Text style={styles.logo}>BOLICHE</Text>
-            <Text style={styles.logoSubtitle}>
-              NIGHTLIFE EXPERIENCE
+            <Text style={styles.logoSubtitle}>NIGHTLIFE EXPERIENCE</Text>
+          </View>
+
+          <View style={styles.statusBadge}>
+            <View style={styles.statusDot} />
+            <Text style={styles.statusText}>EXPERIENCIA PREMIUM</Text>
+          </View>
+        </View>
+
+        <View style={styles.hero}>
+          <Text style={styles.heroEyebrow}>BIENVENIDO A OTRA NOCHE</Text>
+
+          <Text style={styles.heroTitle}>
+            LA NOCHE{"\n"}
+            <Text style={styles.goldText}>ES TUYA.</Text>
+          </Text>
+
+          <Text style={styles.heroDescription}>
+            Descubrí los próximos eventos y preparate para vivir una experiencia
+            única.
+          </Text>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => {
+              if (eventos.length > 0) {
+                router.push(`/evento/${eventos[0]._id}`);
+              }
+            }}
+            disabled={eventos.length === 0}
+          >
+            <Text style={styles.primaryButtonText}>DESCUBRIR EVENTO</Text>
+            <Text style={styles.buttonArrow}>→</Text>
+          </Pressable>
+
+          <View style={styles.heroDecoration}>
+            <View style={styles.decorationLine} />
+            <Text style={styles.decorationText}>
+              MÚSICA · LUCES · EXPERIENCIA
             </Text>
-          </View>
-
-          <View style={styles.menuIcon}>
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
+            <View style={styles.decorationLine} />
           </View>
         </View>
 
-        {/* Presentación */}
-        <View style={styles.intro}>
-          <Text style={styles.eyebrow}>
-            DESCUBRÍ LA NOCHE
-          </Text>
-
-          <Text style={styles.title}>
-            Noches que{'\n'}dejan huella.
-          </Text>
-
-          <Text style={styles.description}>
-            Viví experiencias únicas.
-            Descubrí lo que tenemos preparado para vos.
-          </Text>
-        </View>
-
-        {/* Evento destacado */}
         <Pressable
           style={({ pressed }) => [
-            styles.featuredCard,
-            pressed && styles.pressed,
+            styles.reservasButton,
+            pressed && styles.buttonPressed,
           ]}
-          onPress={() => router.push('/evento/1')}
-          
+          onPress={() => router.push("/mis-reservas")}
         >
-          <View style={styles.featuredArtwork}>
-            <Text style={styles.artworkTop}>
-              BOLICHE PRESENTA
-            </Text>
+          <View style={styles.reservasIcon}>
+            <Text style={styles.ticketIcon}>▤</Text>
+          </View>
 
-            <Text style={styles.artworkTitle}>
-              GOLDEN
-            </Text>
-
-            <Text style={styles.artworkTitle}>
-              NIGHT
-            </Text>
-
-            <View style={styles.artworkDivider} />
-
-            <Text style={styles.artworkBottom}>
-              UNA NOCHE EXCLUSIVA
+          <View style={styles.reservasInfo}>
+            <Text style={styles.reservasTitle}>MIS RESERVAS</Text>
+            <Text style={styles.reservasDescription}>
+              Consultá tus entradas reservadas
             </Text>
           </View>
 
-          <View style={styles.featuredInfo}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                EVENTO DESTACADO
-              </Text>
-            </View>
-
-            <Text style={styles.eventDate}>
-              SÁBADO · 23:00 HS
-            </Text>
-
-            <Text style={styles.eventName}>
-              Golden Night
-            </Text>
-
-            <Text style={styles.eventDescription}>
-              Música, luces y una experiencia diferente.
-            </Text>
-
-            <View style={styles.button}>
-              <Text style={styles.buttonText}>
-                DESCUBRIR EVENTO  →
-              </Text>
-            </View>
-          </View>
+          <Text style={styles.reservasArrow}>›</Text>
         </Pressable>
 
-        {/* Próximos eventos */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.eyebrow}>
-              LA AGENDA
-            </Text>
+            <Text style={styles.sectionEyebrow}>NO TE LO PIERDAS</Text>
+            <Text style={styles.sectionTitle}>PRÓXIMOS EVENTOS</Text>
+          </View>
 
-            <Text style={styles.sectionTitle}>
-              Próximos eventos
+          <View style={styles.eventCount}>
+            <Text style={styles.eventCountText}>
+              {String(eventos.length).padStart(2, "0")}
+            </Text>
+          </View>
+        </View>
+
+        {cargando ? (
+          <View style={styles.messageContainer}>
+            <ActivityIndicator size="large" color={GOLD} />
+            <Text style={styles.messageText}>Cargando eventos...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.messageContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.retryButton} onPress={cargarEventos}>
+              <Text style={styles.retryText}>REINTENTAR</Text>
+            </Pressable>
+          </View>
+        ) : eventos.length === 0 ? (
+          <View style={styles.messageContainer}>
+            <Text style={styles.messageText}>
+              No hay eventos disponibles por el momento.
+            </Text>
+          </View>
+        ) : (
+          eventos.map((evento, index) => (
+            <Pressable
+              key={evento._id}
+              style={({ pressed }) => [
+                styles.eventCard,
+                pressed && styles.eventCardPressed,
+              ]}
+              onPress={() => router.push(`/evento/${evento._id}`)}
+            >
+              <View style={styles.eventNumberContainer}>
+                <Text style={styles.eventNumber}>
+                  {String(index + 1).padStart(2, "0")}
+                </Text>
+              </View>
+
+              <View style={styles.eventInfo}>
+                <Text style={styles.eventCategory}>NOCHE PREMIUM</Text>
+                <Text style={styles.eventName}>{evento.nombre}</Text>
+
+                <View style={styles.eventDetails}>
+                  <Text style={styles.eventDay}>{evento.fecha}</Text>
+                  <Text style={styles.detailSeparator}>•</Text>
+                  <Text style={styles.eventTime}>{evento.horario} HS</Text>
+                </View>
+
+                <Text style={styles.eventDescription}>
+                  {evento.descripcion}
+                </Text>
+              </View>
+
+              <View style={styles.eventArrowContainer}>
+                <Text style={styles.eventArrow}>↗</Text>
+              </View>
+            </Pressable>
+          ))
+        )}
+
+        {/* Acceso al panel de administración */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.adminButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => router.push("/admin/login" as any)}
+        >
+          <Text style={styles.adminIcon}>⚙</Text>
+
+          <View style={styles.adminInfo}>
+            <Text style={styles.adminTitle}>PANEL DE ADMINISTRACIÓN</Text>
+            <Text style={styles.adminDescription}>
+              Gestioná eventos y reservas
             </Text>
           </View>
 
-          <Text style={styles.eventCount}>
-            0{events.length}
-          </Text>
-        </View>
+          <Text style={styles.adminArrow}>›</Text>
+        </Pressable>
 
-        {events.map((event, index) => (
-          <Pressable
-            key={event.id}
-            style={({ pressed }) => [
-              styles.eventCard,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => router.push(`/evento/${event.id}`)}
-            
-          >
-            <View style={styles.eventNumber}>
-              <Text style={styles.eventNumberText}>
-                0{index + 1}
-              </Text>
-            </View>
-
-            <View style={styles.eventDetails}>
-              <Text style={styles.eventCategory}>
-                {event.category}
-              </Text>
-
-              <Text style={styles.eventListName}>
-                {event.name}
-              </Text>
-
-              <Text style={styles.eventDate}>
-                {event.day} · {event.time}
-              </Text>
-            </View>
-
-            <Text style={styles.arrow}>↗</Text>
-          </Pressable>
-        ))}
-
-        {/* Pie */}
         <View style={styles.footer}>
+          <View style={styles.footerLine} />
           <Text style={styles.footerLogo}>BOLICHE</Text>
-          <Text style={styles.footerText}>
-            TU PRÓXIMA NOCHE EMPIEZA ACÁ.
+          <Text style={styles.footerText}>CADA NOCHE TIENE SU HISTORIA.</Text>
+          <Text style={styles.footerCopyright}>
+            © 2026 BOLICHE · NIGHTLIFE EXPERIENCE
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const GOLD = '#D6B56D';
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0B0B0B',
-  },
-  container: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 40,
-  },
+  container: { flex: 1, backgroundColor: BACKGROUND },
+  scrollContent: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 35 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 26,
-    borderBottomWidth: 1,
-    borderBottomColor: '#29251C',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 42,
   },
-  logo: {
-    color: GOLD,
-    fontSize: 25,
-    fontWeight: '900',
-    letterSpacing: 5,
-  },
+  logo: { color: GOLD, fontSize: 24, fontWeight: "900", letterSpacing: 4 },
   logoSubtitle: {
-    color: '#A59A83',
+    color: "#777777",
     fontSize: 8,
     letterSpacing: 2,
-    marginTop: 5,
+    marginTop: 4,
   },
-  menuIcon: {
-    gap: 5,
-    padding: 8,
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#37301B",
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 4,
   },
-  menuLine: {
-    width: 23,
-    height: 2,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: GOLD,
+    marginRight: 6,
   },
-  intro: {
-    paddingTop: 34,
-    paddingBottom: 26,
+  statusText: {
+    color: GOLD,
+    fontSize: 8,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
-  eyebrow: {
+  hero: {
+    backgroundColor: "#11100D",
+    borderWidth: 1,
+    borderColor: "#302819",
+    borderRadius: 12,
+    padding: 22,
+    paddingTop: 28,
+    marginBottom: 22,
+  },
+  heroEyebrow: {
     color: GOLD,
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2.5,
-  },
-  title: {
-    color: '#F8F5EF',
-    fontSize: 36,
-    fontWeight: '800',
-    lineHeight: 43,
-    marginTop: 13,
-  },
-  description: {
-    color: '#A9A49A',
-    fontSize: 14,
-    lineHeight: 22,
-    marginTop: 12,
-    maxWidth: 290,
-  },
-  featuredCard: {
-    borderRadius: 5,
-    overflow: 'hidden',
-    backgroundColor: '#171612',
-    borderWidth: 1,
-    borderColor: '#393020',
-  },
-  featuredArtwork: {
-    minHeight: 205,
-    backgroundColor: '#211D14',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  artworkTop: {
-    color: GOLD,
-    fontSize: 9,
-    letterSpacing: 3,
+    fontWeight: "700",
+    letterSpacing: 2,
     marginBottom: 17,
   },
-  artworkTitle: {
-    color: '#F3E6C4',
-    fontSize: 39,
-    fontWeight: '900',
-    letterSpacing: 5,
-    lineHeight: 43,
-  },
-  artworkDivider: {
-    width: 55,
-    height: 1,
-    backgroundColor: GOLD,
-    marginVertical: 13,
-  },
-  artworkBottom: {
-    color: '#BDA875',
-    fontSize: 8,
-    letterSpacing: 3,
-  },
-  featuredInfo: {
-    padding: 19,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#6E5A32',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    color: GOLD,
-    fontSize: 9,
-    fontWeight: '700',
+  heroTitle: {
+    color: "#FFFFFF",
+    fontSize: 43,
+    lineHeight: 47,
+    fontWeight: "900",
     letterSpacing: 1,
   },
-  eventDate: {
-    color: '#B8AD98',
-    fontSize: 11,
-    letterSpacing: 1,
-    marginTop: 13,
-  },
-  eventName: {
-    color: '#F8F5EF',
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 7,
-  },
-  eventDescription: {
-    color: '#A9A49A',
+  goldText: { color: GOLD },
+  heroDescription: {
+    color: "#A6A6A6",
     fontSize: 13,
-    lineHeight: 20,
-    marginTop: 7,
+    lineHeight: 21,
+    marginTop: 18,
+    marginBottom: 24,
   },
-  button: {
+  primaryButton: {
+    minHeight: 52,
     backgroundColor: GOLD,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 20,
+    borderRadius: 6,
+    paddingHorizontal: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  buttonText: {
-    color: '#15130F',
-    fontSize: 11,
-    fontWeight: '900',
+  primaryButtonText: {
+    color: "#090909",
+    fontSize: 12,
+    fontWeight: "900",
     letterSpacing: 1,
   },
+  buttonArrow: { color: "#090909", fontSize: 23, fontWeight: "600" },
+  buttonPressed: { opacity: 0.75 },
+  heroDecoration: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 24,
+    gap: 8,
+  },
+  decorationLine: { flex: 1, height: 1, backgroundColor: "#393124" },
+  decorationText: { color: "#777064", fontSize: 8, letterSpacing: 1 },
+  reservasButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: CARD,
+    borderWidth: 1,
+    borderColor: "#38301D",
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 37,
+  },
+  reservasIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 6,
+    backgroundColor: "#292315",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 13,
+  },
+  ticketIcon: { color: GOLD, fontSize: 23 },
+  reservasInfo: { flex: 1 },
+  reservasTitle: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  reservasDescription: { color: "#888888", fontSize: 11, marginTop: 5 },
+  reservasArrow: { color: GOLD, fontSize: 28, marginLeft: 8 },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: 38,
-    marginBottom: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  sectionEyebrow: {
+    color: GOLD,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 2,
+    marginBottom: 7,
   },
   sectionTitle: {
-    color: '#F8F5EF',
-    fontSize: 23,
-    fontWeight: '800',
-    marginTop: 8,
+    color: "#FFFFFF",
+    fontSize: 19,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   eventCount: {
-    color: '#766443',
-    fontSize: 17,
-    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: "#40351F",
+    borderRadius: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
   },
+  eventCountText: { color: GOLD, fontSize: 12, fontWeight: "800" },
   eventCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#131311',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: CARD,
     borderWidth: 1,
-    borderColor: '#292720',
+    borderColor: "#262626",
+    borderRadius: 8,
     padding: 15,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  eventNumber: {
-    width: 42,
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#55472B',
-    justifyContent: 'center',
-    alignItems: 'center',
+  eventCardPressed: { opacity: 0.7, borderColor: GOLD },
+  eventNumberContainer: {
+    width: 34,
+    height: 34,
+    backgroundColor: "#292315",
+    borderRadius: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    marginTop: 3,
   },
-  eventNumberText: {
-    color: GOLD,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  eventDetails: {
-    flex: 1,
-    marginLeft: 13,
-  },
+  eventNumber: { color: GOLD, fontSize: 12, fontWeight: "800" },
+  eventInfo: { flex: 1 },
   eventCategory: {
     color: GOLD,
-    fontSize: 8,
-    letterSpacing: 1.5,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.3,
+    marginBottom: 6,
   },
-  eventListName: {
-    color: '#F4F0E8',
-    fontSize: 15,
-    fontWeight: '800',
+  eventName: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  eventDetails: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 9,
+  },
+  eventDay: { color: "#D0D0D0", fontSize: 10, fontWeight: "700" },
+  detailSeparator: { color: GOLD, fontSize: 11, marginHorizontal: 7 },
+  eventTime: { color: "#A0A0A0", fontSize: 10 },
+  eventDescription: {
+    color: "#858585",
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 10,
+  },
+  eventArrowContainer: { paddingLeft: 8, paddingTop: 1 },
+  eventArrow: { color: GOLD, fontSize: 22 },
+  messageContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: CARD,
+    borderRadius: 8,
+    gap: 12,
+    marginBottom: 12,
+  },
+  messageText: { color: "#A6A6A6", fontSize: 13, textAlign: "center" },
+  errorText: { color: "#FF7777", fontSize: 13, textAlign: "center" },
+  retryButton: {
+    borderWidth: 1,
+    borderColor: GOLD,
+    borderRadius: 6,
+    padding: 12,
+  },
+  retryText: { color: GOLD, fontWeight: "800", fontSize: 11 },
+  adminButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#11100D",
+    borderWidth: 1,
+    borderColor: "#80691E",
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  adminIcon: {
+    color: GOLD,
+    fontSize: 25,
+    marginRight: 13,
+  },
+  adminInfo: { flex: 1 },
+  adminTitle: {
+    color: GOLD,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  adminDescription: {
+    color: "#888888",
+    fontSize: 11,
     marginTop: 5,
   },
-  arrow: {
+  adminArrow: {
     color: GOLD,
-    fontSize: 23,
+    fontSize: 27,
     marginLeft: 8,
   },
-  pressed: {
-    opacity: 0.7,
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: 38,
-    paddingTop: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#29251C',
+  footer: { alignItems: "center", marginTop: 30, paddingTop: 22 },
+  footerLine: {
+    height: 1,
+    width: 55,
+    backgroundColor: GOLD,
+    marginBottom: 18,
   },
   footerLogo: {
     color: GOLD,
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 19,
+    fontWeight: "900",
     letterSpacing: 5,
   },
   footerText: {
-    color: '#777064',
-    fontSize: 8,
-    letterSpacing: 2,
+    color: "#8A8A8A",
+    fontSize: 9,
+    letterSpacing: 1.5,
     marginTop: 9,
+  },
+  footerCopyright: {
+    color: "#555555",
+    fontSize: 8,
+    marginTop: 20,
+    letterSpacing: 0.5,
   },
 });
