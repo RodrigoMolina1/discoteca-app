@@ -41,6 +41,25 @@ type Reserva = {
   createdAt?: string;
 };
 
+type ItemCompra = {
+  productoId: string;
+  nombre: string;
+  precioUnitario: number;
+  cantidad: number;
+  subtotal: number;
+};
+
+type Compra = {
+  _id: string;
+  usuarioId: string;
+  items: ItemCompra[];
+  total: number;
+  codigoQR: string;
+  utilizada: boolean;
+  fechaUtilizacion: string | null;
+  createdAt?: string;
+};
+
 const formularioVacio = {
   nombre: "",
   fecha: "",
@@ -53,12 +72,20 @@ const formularioVacio = {
 export default function AdminScreen() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [compras, setCompras] = useState<Compra[]>([]);
+
   const [formulario, setFormulario] = useState(formularioVacio);
   const [eventoEditando, setEventoEditando] = useState<string | null>(null);
+
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [actualizando, setActualizando] = useState(false);
-  const [seccion, setSeccion] = useState<"eventos" | "reservas">("eventos");
+
+  const [validandoCompra, setValidandoCompra] = useState<string | null>(null);
+
+  const [seccion, setSeccion] = useState<"eventos" | "reservas" | "compras">(
+    "eventos",
+  );
 
   async function obtenerToken(): Promise<string> {
     const token = await SecureStore.getItemAsync(TOKEN_KEY);
@@ -106,26 +133,35 @@ export default function AdminScreen() {
     try {
       const token = await obtenerToken();
 
-      const [respuestaEventos, respuestaReservas] = await Promise.all([
-        fetch(`${API_URL}/eventos`),
-        fetch(`${API_URL}/reservas`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-      ]);
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+
+      const [respuestaEventos, respuestaReservas, respuestaCompras] =
+        await Promise.all([
+          fetch(`${API_URL}/eventos`),
+          fetch(`${API_URL}/reservas`, { headers }),
+          fetch(`${API_URL}/barra/admin/compras`, { headers }),
+        ]);
 
       await manejarRespuestaNoAutorizada(respuestaReservas);
+      await manejarRespuestaNoAutorizada(respuestaCompras);
 
-      if (!respuestaEventos.ok || !respuestaReservas.ok) {
+      if (
+        !respuestaEventos.ok ||
+        !respuestaReservas.ok ||
+        !respuestaCompras.ok
+      ) {
         throw new Error("No se pudieron cargar los datos del servidor.");
       }
 
       const datosEventos: Evento[] = await respuestaEventos.json();
       const datosReservas: Reserva[] = await respuestaReservas.json();
+      const datosCompras: Compra[] = await respuestaCompras.json();
 
       setEventos(datosEventos);
       setReservas(datosReservas);
+      setCompras(datosCompras);
     } catch (error) {
       mostrarError(
         error,
@@ -207,6 +243,7 @@ export default function AdminScreen() {
 
     try {
       const token = await obtenerToken();
+
       const url = eventoEditando
         ? `${API_URL}/eventos/${eventoEditando}`
         : `${API_URL}/eventos`;
@@ -226,6 +263,7 @@ export default function AdminScreen() {
 
       if (!respuesta.ok) {
         const mensaje = resultado?.message;
+
         throw new Error(
           Array.isArray(mensaje)
             ? mensaje.join("\n")
@@ -334,6 +372,79 @@ export default function AdminScreen() {
     }
   }
 
+  function confirmarValidarCompra(compra: Compra) {
+    if (compra.utilizada) {
+      Alert.alert(
+        "Compra utilizada",
+        "Esta compra ya fue validada anteriormente.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Validar compra",
+      `¿Confirmás la entrega de esta compra por $${compra.total.toLocaleString("es-AR")}?`,
+      [
+        {
+          text: "Volver",
+          style: "cancel",
+        },
+        {
+          text: "VALIDAR",
+          onPress: () => validarCompra(compra),
+        },
+      ],
+    );
+  }
+
+  async function validarCompra(compra: Compra) {
+    setValidandoCompra(compra._id);
+
+    try {
+      const token = await obtenerToken();
+
+      const respuesta = await fetch(`${API_URL}/barra/admin/validar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          codigoQR: compra.codigoQR,
+        }),
+      });
+
+      await manejarRespuestaNoAutorizada(respuesta);
+
+      const resultado = await respuesta.json().catch(() => null);
+
+      if (!respuesta.ok) {
+        throw new Error(resultado?.message ?? "No se pudo validar la compra.");
+      }
+
+      setCompras((anteriores) =>
+        anteriores.map((item) =>
+          item._id === compra._id
+            ? {
+                ...item,
+                utilizada: true,
+                fechaUtilizacion: new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+
+      Alert.alert(
+        "Compra validada",
+        "La compra fue validada correctamente. Este código QR ya no podrá utilizarse nuevamente.",
+      );
+    } catch (error) {
+      mostrarError(error, "No se pudo validar la compra.");
+    } finally {
+      setValidandoCompra(null);
+    }
+  }
+
   async function cerrarSesion() {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     router.replace("/admin/login" as any);
@@ -379,7 +490,7 @@ export default function AdminScreen() {
         </View>
 
         <Text style={styles.subtitulo}>
-          Gestioná eventos y reservas desde la aplicación.
+          Gestioná eventos, reservas y compras desde la aplicación.
         </Text>
 
         <View style={styles.resumen}>
@@ -399,7 +510,28 @@ export default function AdminScreen() {
             <Text style={styles.numero}>{reservas.length}</Text>
             <Text style={styles.resumenTexto}>Reservas</Text>
           </View>
+
+          <View style={styles.resumenItem}>
+            <Text style={styles.numero}>{compras.length}</Text>
+            <Text style={styles.resumenTexto}>Compras</Text>
+          </View>
         </View>
+
+        {/* GESTIÓN DE PRODUCTOS DE BARRA */}
+
+        <TouchableOpacity
+          style={styles.botonProductos}
+          onPress={() => router.push("/admin/productos" as any)}
+        >
+          <Text style={styles.botonProductosTitulo}>
+            GESTIONAR PRODUCTOS DE BARRA
+          </Text>
+          <Text style={styles.botonProductosSubtitulo}>
+            Crear tragos, editar precios y administrar el menú.
+          </Text>
+        </TouchableOpacity>
+
+        {/* PESTAÑAS */}
 
         <View style={styles.pestanas}>
           <TouchableOpacity
@@ -435,9 +567,28 @@ export default function AdminScreen() {
               RESERVAS
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.pestana,
+              seccion === "compras" && styles.pestanaActiva,
+            ]}
+            onPress={() => setSeccion("compras")}
+          >
+            <Text
+              style={[
+                styles.pestanaTexto,
+                seccion === "compras" && styles.pestanaTextoActiva,
+              ]}
+            >
+              COMPRAS
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {seccion === "eventos" ? (
+        {/* SECCIÓN EVENTOS */}
+
+        {seccion === "eventos" && (
           <>
             <View style={styles.tarjeta}>
               <Text style={styles.tituloTarjeta}>
@@ -557,7 +708,10 @@ export default function AdminScreen() {
                         onValueChange={(valor) =>
                           cambiarEstadoEvento(evento, valor)
                         }
-                        trackColor={{ false: "#444", true: "#80691E" }}
+                        trackColor={{
+                          false: "#444",
+                          true: "#80691E",
+                        }}
                         thumbColor={evento.activo ? "#D4AF37" : "#AAA"}
                       />
                     </View>
@@ -575,7 +729,11 @@ export default function AdminScreen() {
               ))
             )}
           </>
-        ) : (
+        )}
+
+        {/* SECCIÓN RESERVAS */}
+
+        {seccion === "reservas" && (
           <>
             <Text style={styles.seccionTitulo}>Reservas registradas</Text>
 
@@ -589,15 +747,19 @@ export default function AdminScreen() {
                   <Text style={styles.nombreEvento}>
                     {reserva.nombreCliente}
                   </Text>
+
                   <Text style={styles.detalle}>
                     Evento: {reserva.eventoNombre}
                   </Text>
+
                   <Text style={styles.detalle}>
                     Entradas: {reserva.cantidad}
                   </Text>
+
                   <Text style={styles.precio}>
                     Total: ${reserva.total.toLocaleString("es-AR")}
                   </Text>
+
                   <Text style={styles.detalle}>
                     Estado: {reserva.utilizada ? "UTILIZADA" : "PENDIENTE"}
                   </Text>
@@ -622,6 +784,132 @@ export default function AdminScreen() {
                     >
                       <Text style={styles.botonTexto}>CANCELAR RESERVA</Text>
                     </TouchableOpacity>
+                  )}
+                </View>
+              ))
+            )}
+          </>
+        )}
+
+        {/* SECCIÓN COMPRAS */}
+
+        {seccion === "compras" && (
+          <>
+            <Text style={styles.seccionTitulo}>Compras de la barra</Text>
+
+            <View style={styles.resumenCompras}>
+              <View style={styles.resumenCompraItem}>
+                <Text style={styles.numero}>
+                  {compras.filter((compra) => !compra.utilizada).length}
+                </Text>
+                <Text style={styles.resumenTexto}>Pendientes</Text>
+              </View>
+
+              <View style={styles.resumenCompraItem}>
+                <Text style={styles.numero}>
+                  {compras.filter((compra) => compra.utilizada).length}
+                </Text>
+                <Text style={styles.resumenTexto}>Utilizadas</Text>
+              </View>
+            </View>
+
+            {compras.length === 0 ? (
+              <Text style={styles.vacio}>
+                Todavía no hay compras registradas.
+              </Text>
+            ) : (
+              compras.map((compra) => (
+                <View key={compra._id} style={styles.tarjeta}>
+                  <View style={styles.filaEntre}>
+                    <Text style={styles.nombreEvento}>
+                      Compra #{compra._id.slice(-6).toUpperCase()}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.etiquetaEstadoCompra,
+                        compra.utilizada
+                          ? styles.etiquetaUtilizada
+                          : styles.etiquetaPendiente,
+                      ]}
+                    >
+                      <Text style={styles.textoEstadoCompra}>
+                        {compra.utilizada ? "UTILIZADA" : "PENDIENTE"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.detalle}>Productos:</Text>
+
+                  {compra.items?.map((item, indice) => (
+                    <View
+                      key={`${compra._id}-${item.productoId}-${indice}`}
+                      style={styles.filaProducto}
+                    >
+                      <View style={styles.flex}>
+                        <Text style={styles.nombreProducto}>{item.nombre}</Text>
+                        <Text style={styles.detalle}>
+                          Cantidad: {item.cantidad} · $
+                          {item.precioUnitario.toLocaleString("es-AR")} c/u
+                        </Text>
+                      </View>
+
+                      <Text style={styles.subtotalProducto}>
+                        ${item.subtotal.toLocaleString("es-AR")}
+                      </Text>
+                    </View>
+                  ))}
+
+                  <View style={styles.separador} />
+
+                  <Text style={styles.precio}>
+                    Total: ${compra.total.toLocaleString("es-AR")}
+                  </Text>
+
+                  {compra.createdAt ? (
+                    <Text style={styles.detalle}>
+                      Fecha:{" "}
+                      {new Date(compra.createdAt).toLocaleString("es-AR")}
+                    </Text>
+                  ) : null}
+
+                  <Text style={styles.codigoQR}>
+                    Código QR: {compra.codigoQR}
+                  </Text>
+
+                  {compra.utilizada && compra.fechaUtilizacion ? (
+                    <Text style={styles.detalle}>
+                      Validada:{" "}
+                      {new Date(compra.fechaUtilizacion).toLocaleString(
+                        "es-AR",
+                      )}
+                    </Text>
+                  ) : null}
+
+                  {!compra.utilizada && (
+                    <TouchableOpacity
+                      style={[
+                        styles.boton,
+                        validandoCompra === compra._id &&
+                          styles.botonDeshabilitado,
+                      ]}
+                      onPress={() => confirmarValidarCompra(compra)}
+                      disabled={validandoCompra !== null}
+                    >
+                      <Text style={styles.botonTexto}>
+                        {validandoCompra === compra._id
+                          ? "VALIDANDO..."
+                          : "VALIDAR COMPRA"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {compra.utilizada && (
+                    <View style={styles.mensajeUtilizada}>
+                      <Text style={styles.textoMensajeUtilizada}>
+                        ESTA COMPRA YA FUE ENTREGADA
+                      </Text>
+                    </View>
                   )}
                 </View>
               ))
@@ -725,6 +1013,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 5,
   },
+
+  // NUEVO BOTÓN DE PRODUCTOS
+
+  botonProductos: {
+    backgroundColor: "#151515",
+    borderWidth: 1,
+    borderColor: "#D4AF37",
+    borderRadius: 12,
+    padding: 17,
+    marginBottom: 22,
+    alignItems: "center",
+  },
+  botonProductosTitulo: {
+    color: "#D4AF37",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textAlign: "center",
+  },
+  botonProductosSubtitulo: {
+    color: "#AAA",
+    fontSize: 11,
+    marginTop: 7,
+    textAlign: "center",
+  },
+
   pestanas: {
     flexDirection: "row",
     backgroundColor: "#151515",
@@ -744,7 +1058,7 @@ const styles = StyleSheet.create({
   pestanaTexto: {
     color: "#AAA",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 11,
   },
   pestanaTextoActiva: {
     color: "#090909",
@@ -827,6 +1141,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
     marginBottom: 8,
+    flexShrink: 1,
   },
   detalle: {
     color: "#AAA",
@@ -880,5 +1195,69 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center",
     marginTop: 25,
+  },
+  resumenCompras: {
+    flexDirection: "row",
+    backgroundColor: "#151515",
+    borderWidth: 1,
+    borderColor: "#292929",
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: 18,
+  },
+  resumenCompraItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  etiquetaEstadoCompra: {
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  etiquetaPendiente: {
+    backgroundColor: "#4A3B13",
+  },
+  etiquetaUtilizada: {
+    backgroundColor: "#17452A",
+  },
+  textoEstadoCompra: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  filaProducto: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 10,
+  },
+  nombreProducto: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  subtotalProducto: {
+    color: "#D4AF37",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  separador: {
+    height: 1,
+    backgroundColor: "#333",
+    marginTop: 15,
+  },
+  mensajeUtilizada: {
+    backgroundColor: "#17452A",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    marginTop: 15,
+  },
+  textoMensajeUtilizada: {
+    color: "#A5E5B9",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
 });

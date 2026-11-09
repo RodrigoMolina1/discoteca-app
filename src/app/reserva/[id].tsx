@@ -13,8 +13,9 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { obtenerEvento, type Evento } from "../../lib/api";
-import { guardarReserva } from "../../lib/reservas";
+import { obtenerTokenCliente, obtenerUsuarioCliente } from "../../lib/auth";
 
 const GOLD = "#D4AF37";
 const BACKGROUND = "#090909";
@@ -32,10 +33,22 @@ export default function ReservaScreen() {
   const [numeroReserva, setNumeroReserva] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  function volverAlEvento() {
+    Keyboard.dismiss();
+
+    if (id) {
+      router.replace(`/evento/${id}`);
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/");
+    }
+  }
+
   useEffect(() => {
     let activo = true;
 
-    async function cargarEvento() {
+    async function cargarDatos() {
       try {
         setCargando(true);
 
@@ -47,6 +60,16 @@ export default function ReservaScreen() {
 
         if (activo) {
           setEvento(datos);
+        }
+
+        try {
+          const usuario = await obtenerUsuarioCliente();
+
+          if (activo && usuario?.nombre) {
+            setNombre(usuario.nombre);
+          }
+        } catch (error) {
+          console.error("No se pudo obtener el usuario:", error);
         }
       } catch (error) {
         if (activo) {
@@ -64,7 +87,7 @@ export default function ReservaScreen() {
       }
     }
 
-    cargarEvento();
+    void cargarDatos();
 
     return () => {
       activo = false;
@@ -101,10 +124,32 @@ export default function ReservaScreen() {
     setGuardando(true);
 
     try {
+      const token = await obtenerTokenCliente();
+
+      if (!token) {
+        Alert.alert(
+          "Iniciá sesión",
+          "Necesitás ingresar a tu cuenta para reservar entradas.",
+          [
+            {
+              text: "Cancelar",
+              style: "cancel",
+            },
+            {
+              text: "Iniciar sesión",
+              onPress: () => router.push("/cliente/login"),
+            },
+          ],
+        );
+
+        return;
+      }
+
       const respuesta = await fetch(`${API_URL}/reservas`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           nombreCliente: nombre.trim(),
@@ -124,28 +169,10 @@ export default function ReservaScreen() {
       }
 
       if (!datos.codigoQR) {
-        throw new Error(
-          "La reserva fue recibida, pero el backend no devolvió el código QR esperado.",
-        );
+        throw new Error("El backend no devolvió el código QR de la reserva.");
       }
 
-      const codigo = String(datos.codigoQR);
-
-      // Conservamos la reserva en el dispositivo para que
-      // siga apareciendo en la pantalla "Mis reservas".
-      await guardarReserva({
-        id: codigo,
-        eventoId: evento._id,
-        eventoNombre: evento.nombre,
-        fecha: evento.fecha,
-        horario: evento.horario,
-        cantidad: cantidadNumerica,
-        precioUnitario: evento.precio,
-        total: Number(datos.total ?? total),
-        fechaCreacion: new Date().toISOString(),
-      });
-
-      setNumeroReserva(codigo);
+      setNumeroReserva(String(datos.codigoQR));
       setConfirmada(true);
     } catch (error) {
       console.error("Error al crear la reserva:", error);
@@ -163,27 +190,28 @@ export default function ReservaScreen() {
 
   if (cargando) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered} edges={["top"]}>
         <ActivityIndicator size="large" color={GOLD} />
         <Text style={styles.description}>Cargando evento...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!evento) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered} edges={["top"]}>
         <Text style={styles.title}>EVENTO NO ENCONTRADO</Text>
+
         <Pressable style={styles.button} onPress={() => router.replace("/")}>
           <Text style={styles.buttonText}>VOLVER AL INICIO</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (confirmada) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <StatusBar barStyle="light-content" backgroundColor={BACKGROUND} />
 
         <ScrollView contentContainerStyle={styles.confirmationContent}>
@@ -192,7 +220,7 @@ export default function ReservaScreen() {
           <Text style={styles.title}>¡ESTÁS EN LA LISTA!</Text>
 
           <Text style={styles.description}>
-            Tu reserva fue registrada en el backend.
+            Tu reserva fue registrada correctamente en tu cuenta.
           </Text>
 
           <View style={styles.ticket}>
@@ -251,19 +279,24 @@ export default function ReservaScreen() {
             <Text style={styles.secondaryButtonText}>VOLVER AL INICIO</Text>
           </Pressable>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor={BACKGROUND} />
 
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.formContent}
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable
+          onPress={volverAlEvento}
+          onPressIn={() => console.log("Toque detectado en VOLVER")}
+          hitSlop={15}
+          style={styles.backButton}
+        >
           <Text style={styles.backText}>← VOLVER AL EVENTO</Text>
         </Pressable>
 
@@ -279,6 +312,7 @@ export default function ReservaScreen() {
           <View style={styles.ticketDivider} />
 
           <Text style={styles.label}>NOMBRE COMPLETO</Text>
+
           <TextInput
             value={nombre}
             onChangeText={setNombre}
@@ -290,6 +324,7 @@ export default function ReservaScreen() {
           />
 
           <Text style={styles.label}>CANTIDAD DE ENTRADAS (1–10)</Text>
+
           <TextInput
             value={cantidad}
             onChangeText={setCantidad}
@@ -327,10 +362,10 @@ export default function ReservaScreen() {
         </Pressable>
 
         <Text style={styles.warning}>
-          La reserva se registrará en el backend. No se realiza ningún cobro.
+          La reserva se registrará en tu cuenta. No se realiza ningún cobro.
         </Text>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -348,18 +383,23 @@ const styles = StyleSheet.create({
   },
   formContent: {
     padding: 22,
-    paddingTop: 28,
+    paddingTop: 12,
     paddingBottom: 45,
   },
   confirmationContent: {
     alignItems: "center",
     padding: 22,
-    paddingTop: 35,
+    paddingTop: 12,
     paddingBottom: 45,
   },
   backButton: {
     marginBottom: 30,
     alignSelf: "flex-start",
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    zIndex: 10,
+    elevation: 10,
   },
   backText: {
     color: GOLD,

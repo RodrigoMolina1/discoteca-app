@@ -11,7 +11,9 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { obtenerEventos, type Evento } from "../lib/api";
+import { obtenerTokenCliente } from "../lib/auth";
 
 const API_URL = "http://10.0.2.2:3000";
 const GOLD = "#D4AF37";
@@ -38,23 +40,61 @@ type ReservaMostrada = ReservaBackend & {
 export default function MisReservasScreen() {
   const [reservas, setReservas] = useState<ReservaMostrada[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [cancelando, setCancelando] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // Volver a la pantalla anterior o al inicio si no existe historial.
+  function volver() {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/");
+    }
+  }
 
   const cargarReservas = useCallback(async () => {
     setCargando(true);
     setError("");
 
     try {
-      const [respuestaReservas, eventos] = await Promise.all([
-        fetch(`${API_URL}/reservas`),
-        obtenerEventos(),
-      ]);
+      const token = await obtenerTokenCliente();
 
-      if (!respuestaReservas.ok) {
-        throw new Error("No se pudieron obtener las reservas.");
+      if (!token) {
+        router.replace("/cliente/login");
+        return;
       }
 
-      const datos: ReservaBackend[] = await respuestaReservas.json();
+      const respuestaReservas = await fetch(
+        `${API_URL}/reservas/mis-reservas`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const datosRespuesta = await respuestaReservas.json();
+
+      if (!respuestaReservas.ok) {
+        const mensaje = Array.isArray(datosRespuesta.message)
+          ? datosRespuesta.message.join("\n")
+          : datosRespuesta.message;
+
+        throw new Error(mensaje || "No se pudieron obtener tus reservas.");
+      }
+
+      const datos: ReservaBackend[] = datosRespuesta;
+
+      // Obtener los eventos por separado para que un error en ellos
+      // no impida mostrar las reservas del usuario.
+      let eventos: Evento[] = [];
+
+      try {
+        eventos = await obtenerEventos();
+      } catch (error) {
+        console.error("No se pudieron obtener los eventos:", error);
+      }
 
       const reservasCompletas: ReservaMostrada[] = datos.map((reserva) => {
         const eventoId =
@@ -62,7 +102,7 @@ export default function MisReservasScreen() {
             ? reserva.eventoId
             : reserva.eventoId?._id;
 
-        const evento = eventos.find((item: Evento) => item._id === eventoId);
+        const evento = eventos.find((item) => item._id === eventoId);
 
         return {
           ...reserva,
@@ -74,8 +114,11 @@ export default function MisReservasScreen() {
       setReservas(reservasCompletas);
     } catch (e) {
       console.error("Error al cargar reservas:", e);
+
       setError(
-        "No pudimos conectar con el servidor. Verificá que NestJS esté funcionando e intentá nuevamente.",
+        e instanceof Error
+          ? e.message
+          : "No pudimos conectar con el servidor. Intentá nuevamente.",
       );
     } finally {
       setCargando(false);
@@ -84,14 +127,26 @@ export default function MisReservasScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      cargarReservas();
+      void cargarReservas();
     }, [cargarReservas]),
   );
 
   async function cancelarReserva(id: string) {
     try {
-      const respuesta = await fetch(`${API_URL}/reservas/${id}`, {
+      setCancelando(id);
+
+      const token = await obtenerTokenCliente();
+
+      if (!token) {
+        router.replace("/cliente/login");
+        return;
+      }
+
+      const respuesta = await fetch(`${API_URL}/reservas/mis-reservas/${id}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const datos = await respuesta.json().catch(() => ({}));
@@ -118,6 +173,8 @@ export default function MisReservasScreen() {
           ? e.message
           : "No se pudo cancelar la reserva. Intentá nuevamente.",
       );
+    } finally {
+      setCancelando(null);
     }
   }
 
@@ -142,14 +199,14 @@ export default function MisReservasScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor={BACKGROUND} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={volver} style={styles.backButton}>
           <Text style={styles.backText}>← VOLVER</Text>
         </Pressable>
 
@@ -176,8 +233,8 @@ export default function MisReservasScreen() {
             <Text style={styles.emptyIcon}>▤</Text>
             <Text style={styles.emptyTitle}>TODAVÍA NO HAY RESERVAS</Text>
             <Text style={styles.emptyDescription}>
-              Cuando se registre una reserva en el servidor, aparecerá acá con
-              su código QR.
+              Cuando registres una reserva desde tu cuenta, aparecerá acá con su
+              código QR.
             </Text>
 
             <Pressable
@@ -271,13 +328,19 @@ export default function MisReservasScreen() {
 
                 {!reserva.utilizada && (
                   <Pressable
-                    style={styles.deleteButton}
+                    style={[
+                      styles.deleteButton,
+                      cancelando === reserva._id && styles.disabledButton,
+                    ]}
+                    disabled={cancelando !== null}
                     onPress={() =>
                       confirmarCancelacion(reserva._id, reserva.eventoNombre)
                     }
                   >
                     <Text style={styles.deleteButtonText}>
-                      CANCELAR RESERVA
+                      {cancelando === reserva._id
+                        ? "CANCELANDO..."
+                        : "CANCELAR RESERVA"}
                     </Text>
                   </Pressable>
                 )}
@@ -290,7 +353,7 @@ export default function MisReservasScreen() {
           <Text style={styles.footerText}>BOLICHE · NIGHTLIFE EXPERIENCE</Text>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -301,7 +364,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 22,
-    paddingTop: 28,
+    paddingTop: 12,
     paddingBottom: 40,
   },
   backButton: {
@@ -525,6 +588,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1,
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   footer: {
     alignItems: "center",

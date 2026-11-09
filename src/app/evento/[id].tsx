@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { obtenerEvento, type Evento } from "../../lib/api";
 
 export default function DetalleEvento() {
@@ -56,16 +57,16 @@ export default function DetalleEvento() {
 
   if (cargando) {
     return (
-      <View style={styles.centrado}>
+      <SafeAreaView style={styles.centrado} edges={["top"]}>
         <ActivityIndicator size="large" color="#D4AF37" />
         <Text style={styles.textoSecundario}>Cargando evento...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error || !evento) {
     return (
-      <View style={styles.centrado}>
+      <SafeAreaView style={styles.centrado} edges={["top"]}>
         <Text style={styles.titulo}>EVENTO NO ENCONTRADO</Text>
         <Text style={styles.textoSecundario}>
           {error || "No se encontró el evento solicitado."}
@@ -74,45 +75,47 @@ export default function DetalleEvento() {
         <Pressable style={styles.boton} onPress={() => router.back()}>
           <Text style={styles.textoBoton}>VOLVER</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.contenedor}>
-      <Pressable onPress={() => router.back()} style={styles.volver}>
-        <Text style={styles.dorado}>← VOLVER</Text>
-      </Pressable>
-
-      <View style={styles.contenido}>
-        <Text style={styles.etiqueta}>BOLICHE · EVENTO EXCLUSIVO</Text>
-
-        <Text style={styles.titulo}>{evento.nombre}</Text>
-
-        <View style={styles.separador} />
-
-        <Text style={styles.subtitulo}>FECHA</Text>
-        <Text style={styles.texto}>{evento.fecha}</Text>
-
-        <Text style={styles.subtitulo}>HORARIO</Text>
-        <Text style={styles.texto}>{evento.horario}</Text>
-
-        <Text style={styles.subtitulo}>DESCRIPCIÓN</Text>
-        <Text style={styles.texto}>{evento.descripcion}</Text>
-
-        <Text style={styles.subtitulo}>ENTRADA</Text>
-        <Text style={styles.precio}>
-          ${evento.precio.toLocaleString("es-AR")}
-        </Text>
-
-        <Pressable
-          style={styles.boton}
-          onPress={() => router.push(`/reserva/${evento._id}`)}
-        >
-          <Text style={styles.textoBoton}>RESERVAR ENTRADA</Text>
+    <SafeAreaView style={styles.contenedor} edges={["top"]}>
+      <ScrollView style={styles.contenedor}>
+        <Pressable onPress={() => router.back()} style={styles.volver}>
+          <Text style={styles.dorado}>← VOLVER</Text>
         </Pressable>
-      </View>
-    </ScrollView>
+
+        <View style={styles.contenido}>
+          <Text style={styles.etiqueta}>BOLICHE · EVENTO EXCLUSIVO</Text>
+
+          <Text style={styles.titulo}>{evento.nombre}</Text>
+
+          <View style={styles.separador} />
+
+          <Text style={styles.subtitulo}>FECHA</Text>
+          <Text style={styles.texto}>{evento.fecha}</Text>
+
+          <Text style={styles.subtitulo}>HORARIO</Text>
+          <Text style={styles.texto}>{evento.horario}</Text>
+
+          <Text style={styles.subtitulo}>DESCRIPCIÓN</Text>
+          <Text style={styles.texto}>{evento.descripcion}</Text>
+
+          <Text style={styles.subtitulo}>ENTRADA</Text>
+          <Text style={styles.precio}>
+            ${evento.precio.toLocaleString("es-AR")}
+          </Text>
+
+          <Pressable
+            style={styles.boton}
+            onPress={() => router.push(`/reserva/${evento._id}`)}
+          >
+            <Text style={styles.textoBoton}>RESERVAR ENTRADA</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
   },
   volver: {
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 8,
   },
   etiqueta: {
     color: "#D4AF37",
